@@ -33,6 +33,8 @@ const MAPPING = {
   'sun.max.fill': 'wb-sunny',
   'moon.fill': 'nights-stay',
   'circle.lefthalf.filled': 'brightness-6',
+  'arrow.clockwise': 'refresh',
+  'arrow.counterclockwise': 'refresh',
 } as IconMapping;
 
 /**

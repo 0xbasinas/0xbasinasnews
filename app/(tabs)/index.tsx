@@ -1,4 +1,5 @@
 import { ArticleCard } from '@/components/ArticleCard';
+import { RefreshButton } from '@/components/RefreshButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -159,7 +160,14 @@ export default function AllNewsScreen() {
                   <ThemedText type="title" style={styles.headerTitle}>
                     Cybersecurity News
                   </ThemedText>
-                  <ThemeToggle />
+                  <View style={styles.headerButtons}>
+                    <RefreshButton
+                      onPress={onRefresh}
+                      refreshing={refreshing}
+                      size={20}
+                    />
+                    <ThemeToggle />
+                  </View>
                 </View>
                 <ThemedText style={styles.headerSubtitle}>
                   {articles.length} articles from {getNewsSources().length} sources
@@ -171,7 +179,14 @@ export default function AllNewsScreen() {
                   <ThemedText type="title" style={styles.headerTitle}>
                     Cybersecurity News
                   </ThemedText>
-                  <ThemeToggle />
+                  <View style={styles.headerButtons}>
+                    <RefreshButton
+                      onPress={onRefresh}
+                      refreshing={refreshing}
+                      size={20}
+                    />
+                    <ThemeToggle />
+                  </View>
                 </View>
               </View>
             )
@@ -234,8 +249,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '700',
     letterSpacing: -0.5,
     flex: 1,
