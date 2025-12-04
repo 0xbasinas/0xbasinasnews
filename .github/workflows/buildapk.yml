@@ -22,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Set your app package name if you need to filter outputs
-      # APP_ID: com.example.app
       EXPO_NO_TELEMETRY: "1"
       CI: "true"
 
@@ -31,17 +29,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node setup (avoid "cache: pnpm" here; we cache pnpm store separately)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
+          cache: "npm"
 
+      # pnpm setup if repo uses it
       - name: Setup pnpm
         if: ${{ hashFiles('**/pnpm-lock.yaml') != '' }}
         uses: pnpm/action-setup@v4
         with:
           version: 9
+          run_install: false
 
       - name: Cache pnpm store
         if: ${{ hashFiles('**/pnpm-lock.yaml') != '' }}
@@ -52,6 +53,7 @@ jobs:
           restore-keys: |
             pnpm-${{ runner.os }}-
 
+      # Dependency installs (auto-detect pkg manager)
       - name: Install dependencies (pnpm)
         if: ${{ hashFiles('**/pnpm-lock.yaml') != '' }}
         run: pnpm install --frozen-lockfile
@@ -64,6 +66,7 @@ jobs:
         if: ${{ hashFiles('**/package-lock.json') != '' && hashFiles('**/pnpm-lock.yaml') == '' && hashFiles('**/yarn.lock') == '' }}
         run: npm ci
 
+      # Java + Android SDK
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -86,16 +89,15 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      # Ensure native project exists and synced with app config
       - name: Ensure android/ exists (expo prebuild)
         run: |
           if [ ! -d "android" ]; then
-            npx expo prebuild --platform android --no-install --clean
+            npx --yes expo prebuild --platform android --no-install --clean
           fi
 
       - name: Sync native code (expo prebuild update)
-        run: |
-          # Keeps native synced with app.json/app.config
-          npx expo prebuild --platform android --no-install
+        run: npx --yes expo prebuild --platform android --no-install
 
       - name: Gradle wrapper permissions
         run: chmod +x android/gradlew
@@ -103,9 +105,7 @@ jobs:
       - name: Build APK
         working-directory: android
         env:
-          # Speed up builds
           ORG_GRADLE_PROJECT_org.gradle.jvmargs: "-Xmx4g -Dfile.encoding=UTF-8"
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
           BUILD_TYPE="${{ github.event.inputs.buildType || 'Debug' }}"
           if [ "$BUILD_TYPE" = "Release" ]; then
@@ -119,9 +119,9 @@ jobs:
         run: |
           BUILD_TYPE="${{ github.event.inputs.buildType || 'Debug' }}"
           if [ "$BUILD_TYPE" = "Release" ]; then
-            PATTERN="**/android/app/build/outputs/apk/release/*.apk"
+            PATTERN="android/app/build/outputs/apk/release/*.apk"
           else
-            PATTERN="**/android/app/build/outputs/apk/debug/*.apk"
+            PATTERN="android/app/build/outputs/apk/debug/*.apk"
           fi
           FILE=$(ls -1 $PATTERN | head -n 1)
           if [ -z "$FILE" ]; then
