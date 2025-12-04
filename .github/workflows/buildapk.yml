@@ -47,7 +47,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup Expo
         run: pnpm add -g @expo/ngrok expo-cli
