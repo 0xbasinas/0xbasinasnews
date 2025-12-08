@@ -656,12 +656,19 @@ function decodeHtmlEntities(text: string): string {
 function cleanDescription(description: string): string {
   if (!description) return '';
 
-  // Decode once, strip tags, then decode again so nested entities are shown as text
-  const decoded = decodeHtmlEntities(description);
-  const withoutTags = decoded.replace(/<[^>]*>/g, '');
-  const fullyDecoded = decodeHtmlEntities(withoutTags);
-
-  return fullyDecoded.trim().substring(0, 200); // Limit to 200 characters
+  // Decode HTML entities first (once only)
+  let cleaned = decodeHtmlEntities(description);
+  
+  // Remove HTML tags repeatedly until none remain
+  // This prevents nested tags like <<script>> from becoming <script> after first pass
+  let previousLength;
+  do {
+    previousLength = cleaned.length;
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+  } while (cleaned.length !== previousLength && cleaned.includes('<'));
+  
+  // DO NOT decode again after tag removal - this would recreate tags from entities like &lt;script&gt;
+  return cleaned.trim().substring(0, 200); // Limit to 200 characters
 }
 
 /**
