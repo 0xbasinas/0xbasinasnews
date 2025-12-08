@@ -4,6 +4,7 @@
     "slug": "0xbasinasnews",
     "version": "1.0.0",
     "orientation": "portrait",
+    "jsEngine": "hermes",
     "icon": "./assets/images/icon.png",
     "scheme": "basinasnews",
     "userInterfaceStyle": "automatic",
@@ -43,7 +44,13 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      ["expo-build-properties", {
+        "android": {
+          "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+        }
+      }]
     ],
     "experiments": {
       "typedRoutes": true,
