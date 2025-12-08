@@ -114,6 +114,28 @@ function isLikelyImageUrl(url: string): boolean {
 }
 
 /**
+ * Safely check if a URL is from WordPress.com CDN or contains wp-content in path
+ * Prevents URL substring sanitization vulnerabilities
+ */
+function isWordPressUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    // Check if hostname ends with .wp.com (WordPress CDN)
+    if (urlObj.hostname.endsWith('.wp.com')) {
+      return true;
+    }
+    // Check if path contains /wp-content/ (self-hosted WordPress)
+    if (urlObj.pathname.includes('/wp-content/')) {
+      return true;
+    }
+    return false;
+  } catch {
+    // If URL parsing fails, return false to skip WordPress-specific processing
+    return false;
+  }
+}
+
+/**
  * Validate and normalize image URL
  */
 function normalizeImageUrl(url: string, baseUrl?: string): string | null {
@@ -125,17 +147,8 @@ function normalizeImageUrl(url: string, baseUrl?: string): string | null {
   // Remove common prefixes/suffixes that might cause issues
   cleanUrl = cleanUrl.replace(/^[,\s]+|[,\s]+$/g, '');
   
-  // Remove HTML entities
-  cleanUrl = cleanUrl
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/')
-    .replace(/&nbsp;/g, ' ');
+  // Decode HTML entities safely (single-pass to avoid double-unescaping)
+  cleanUrl = decodeHtmlEntities(cleanUrl);
   
   // Remove fragments
   cleanUrl = cleanUrl.split('#')[0];
@@ -188,7 +201,7 @@ function normalizeImageUrl(url: string, baseUrl?: string): string | null {
     // WordPress.com CDN format: https://i0.wp.com/example.com/path/image.jpg?resize=...
     // The original URL is in the path after the domain
     let processedUrlObj = urlObj;
-    if (urlObj.hostname.includes('.wp.com')) {
+    if (urlObj.hostname.endsWith('.wp.com')) {
       // Extract the original site URL from the path
       // Path format: /example.com/path/image.jpg
       const pathParts = urlObj.pathname.split('/').filter(Boolean);
@@ -356,12 +369,9 @@ function extractImageUrl(item: any, source: string, articleUrl?: string, channel
         
         // Clean up WordPress.com CDN URLs before normalizing
         // Security Affairs and other WordPress sites use i0.wp.com CDN
-        if (imgUrl.includes('.wp.com') || imgUrl.includes('wp-content')) {
-          // Decode HTML entities in URL
-          imgUrl = imgUrl
-            .replace(/&#038;/g, '&')
-            .replace(/&#x26;/g, '&')
-            .replace(/&amp;/g, '&')
+        if (isWordPressUrl(imgUrl)) {
+          // Decode HTML entities in URL (using safe single-pass decoder)
+          imgUrl = decodeHtmlEntities(imgUrl)
             .replace(/%2C/g, ',')
             .replace(/%2F/g, '/');
           
@@ -378,7 +388,7 @@ function extractImageUrl(item: any, source: string, articleUrl?: string, channel
       if (firstSrcMatch && firstSrcMatch[1]) {
         let firstImgUrl = firstSrcMatch[1].trim();
         // Clean WordPress URLs - remove size suffixes to get full-size
-        if (firstImgUrl.includes('wp-content')) {
+        if (isWordPressUrl(firstImgUrl)) {
           // Check if it's already a large image
           const sizeMatch = firstImgUrl.match(/-(\d+)x(\d+)\.(jpg|jpeg|png|gif|webp)/i);
           if (sizeMatch) {
@@ -412,7 +422,7 @@ function extractImageUrl(item: any, source: string, articleUrl?: string, channel
           const urlMatch = match.match(/=["']([^"']+)["']/i);
           if (urlMatch && urlMatch[1]) {
             let imgUrl = urlMatch[1].trim();
-            if (imgUrl.includes('wp-content')) {
+            if (isWordPressUrl(imgUrl)) {
               imgUrl = imgUrl.replace(/-\d+x\d+\.(jpg|jpeg|png|gif|webp)/i, '.$1');
             }
             const normalized = normalizeImageUrl(imgUrl, baseUrl);
@@ -616,22 +626,42 @@ function extractImageUrl(item: any, source: string, articleUrl?: string, channel
 /**
  * Clean HTML from description
  */
+function decodeHtmlEntities(text: string): string {
+  const entities: Record<string, string> = {
+    nbsp: ' ',
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+  };
+
+  return text.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity) => {
+    const normalized = entity.toLowerCase();
+
+    if (normalized.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+
+    if (normalized.startsWith('#')) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+
+    return entities[normalized] ?? match;
+  });
+}
+
 function cleanDescription(description: string): string {
   if (!description) return '';
-  // Remove HTML tags
-  return description
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/')
-    .trim()
-    .substring(0, 200); // Limit to 200 characters
+
+  // Decode once, strip tags, then decode again so nested entities are shown as text
+  const decoded = decodeHtmlEntities(description);
+  const withoutTags = decoded.replace(/<[^>]*>/g, '');
+  const fullyDecoded = decodeHtmlEntities(withoutTags);
+
+  return fullyDecoded.trim().substring(0, 200); // Limit to 200 characters
 }
 
 /**
